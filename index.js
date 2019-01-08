@@ -1,60 +1,96 @@
-// dependencies
-const http = require('http');
-const url = require('url');
-const StringDecoder = require('string_decoder').StringDecoder;
+/*
+ * Primary file for API
+ *
+ */
 
-// the server should respond to all request with a string
-const server = http.createServer(function(req, res) {
+// Dependencies
+var http = require('http');
+var url = require('url');
+var StringDecoder = require('string_decoder').StringDecoder;
+var config = require('./config');
 
-    // get the url & parse it
-    const parsedUrl = url.parse(req.url, true);
+// Configure the server to respond to all requests with a string
+var server = http.createServer(function(req,res){
 
-    // get the path
-    const path = parsedUrl.pathname;
-    const trimmedPath = path.replace(/^\/+|\/+$/g, '');
+    // Parse the url
+    var parsedUrl = url.parse(req.url, true);
 
-    // get the querystring as an Obj
-    const queryStrObj = parsedUrl.query;
+    // Get the path
+    var path = parsedUrl.pathname;
+    var trimmedPath = path.replace(/^\/+|\/+$/g, '');
 
-    // get the Http method
-    const httpMethod = req.method.toLowerCase();
+    // Get the query string as an object
+    var queryStringObject = parsedUrl.query;
 
-    // get the headers as an obj
-    const headers = req.headers;
+    // Get the HTTP method
+    var method = req.method.toLowerCase();
 
-    // get the payload, if any
-    const decoder = new StringDecoder('utf-8');
-    let buffer = '';
+    //Get the headers as an object
+    var headers = req.headers;
 
-    req.on('data', (data) => {
-        buffer += decoder.write(data)
+    // Get the payload,if any
+    var decoder = new StringDecoder('utf-8');
+    var buffer = '';
+    req.on('data', function(data) {
+        buffer += decoder.write(data);
     });
+    req.on('end', function() {
+        buffer += decoder.end();
 
-    req.on('end', () => {
-       buffer += decoder.end();
+        // Check the router for a matching path for a handler. If one is not found, use the notFound handler instead.
+        var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath] : handlers.notFound;
 
-        // send the response
-       res.end('Hello world \n');
+        // Construct the data object to send to the handler
+        var data = {
+            'trimmedPath' : trimmedPath,
+            'queryStringObject' : queryStringObject,
+            'method' : method,
+            'headers' : headers,
+            'payload' : buffer
+        };
 
-       console.log('Request received with this payload: ', buffer);
+        // Route the request to the handler specified in the router
+        chosenHandler(data,function(statusCode,payload){
+
+            // Use the status code returned from the handler, or set the default status code to 200
+            statusCode = typeof(statusCode) == 'number' ? statusCode : 200;
+
+            // Use the payload returned from the handler, or set the default payload to an empty object
+            payload = typeof(payload) == 'object'? payload : {};
+
+            // Convert the payload to a string
+            var payloadString = JSON.stringify(payload);
+
+            // Return the response
+            res.setHeader('Content-Type', 'application/json');
+            res.writeHead(statusCode);
+            res.end(payloadString);
+            console.log("Returning this response: ",statusCode,payloadString);
+
+        });
+
     });
-
-
-    // TODO: commented out because i already know they work
-    // log the request path
-    // console.log('Request received on path: ' + trimmedPath);
-    // console.log('using Http method : ' + httpMethod);
-    // console.log('using these query string params: ', queryStrObj);
-    // console.log('Request received with these headers: ', headers);
 });
 
-
-// start the server & listen on port 3000
-server.listen(3000, () => {
-    console.log('server is listening on port 3000');
+// Start the server
+server.listen(config.port,function(){
+    console.log('The server is listening on port ' + config.port + ' in ' +config.envName + ' mode');
 });
 
-// define a Request router
-const router = {
-    
+// Define all the handlers
+var handlers = {};
+
+// Sample handler
+handlers.sample = function(data,callback){
+    callback(200,{'name':'sample handler'});
+};
+
+// Not found handler
+handlers.notFound = function(data,callback){
+    callback(404);
+};
+
+// Define the request router
+var router = {
+    'sample' : handlers.sample
 };
